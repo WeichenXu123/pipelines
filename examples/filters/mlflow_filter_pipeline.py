@@ -86,7 +86,7 @@ class Pipeline:
 
         # Snapshot the last user message so outlet can log it as this turn's input
         self.pending_inlets[chat_id] = {
-            "input": get_last_user_message(body.get("messages", [])),
+            "input": get_last_user_message(body["messages"]),
             "model": body.get("model"),
             "user_email": user.get("email") if user else None,
         }
