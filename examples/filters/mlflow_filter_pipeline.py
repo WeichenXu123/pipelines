@@ -16,6 +16,7 @@ from utils.pipelines.main import get_last_assistant_message, get_last_user_messa
 from pydantic import BaseModel
 import mlflow
 from mlflow.entities import SpanType
+from mlflow.tracing.constant import SpanAttributeKey, TokenUsageKey
 
 
 def get_last_assistant_message_obj(messages: List[dict]) -> dict:
@@ -116,23 +117,25 @@ class Pipeline:
         assistant_message_obj = get_last_assistant_message_obj(body["messages"])
 
         # Extract token usage if available
-        usage_attrs = {}
+        token_usage = {}
         if assistant_message_obj:
             info = assistant_message_obj.get("usage") or {}
             input_tokens = info.get("prompt_eval_count") or info.get("prompt_tokens")
             output_tokens = info.get("eval_count") or info.get("completion_tokens")
             if input_tokens is not None:
-                usage_attrs["input_tokens"] = input_tokens
+                token_usage[TokenUsageKey.INPUT_TOKENS] = input_tokens
             if output_tokens is not None:
-                usage_attrs["output_tokens"] = output_tokens
+                token_usage[TokenUsageKey.OUTPUT_TOKENS] = output_tokens
+            if input_tokens is not None and output_tokens is not None:
+                token_usage[TokenUsageKey.TOTAL_TOKENS] = input_tokens + output_tokens
 
         try:
             with mlflow.start_span(name="chat_turn", span_type=SpanType.AGENT) as span:
                 span.set_inputs({"user": user_input})
                 span.set_outputs({"response": assistant_message})
                 span.set_attribute("model", model)
-                for k, v in usage_attrs.items():
-                    span.set_attribute(k, v)
+                if token_usage:
+                    span.set_attribute(SpanAttributeKey.CHAT_USAGE, token_usage)
 
                 # Groups all turns of this chat under one session in the MLflow UI
                 mlflow.update_current_trace(
