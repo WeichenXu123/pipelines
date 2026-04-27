@@ -146,10 +146,6 @@ class Pipeline:
             self.log(f"MLflow trace logged for chat_id: {chat_id}")
         except Exception as e:
             warning = f"[WARNING] Failed to log MLflow trace ({type(e).__name__}) for chat_id: {chat_id}: {e}"
-            print(warning)
             self.log(warning)
 
         return body
-
-
-print("loaded mlfow filter pipeline.")
