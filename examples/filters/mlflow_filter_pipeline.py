@@ -47,13 +47,10 @@ class Pipeline:
             }
         )
 
-        # Keyed by per-request ID (stored in metadata["mlflow_request_id"]) so concurrent
-        # requests for the same chat don't overwrite each other's snapshots.
         self.pending_inlets: dict = {}
 
     def log(self, message: str):
-        if self.valves.debug:
-            print(f"[DEBUG] {message}", flush=True)
+        print(f"[DEBUG] {message}", flush=True)
 
     async def on_startup(self):
         self.log(f"on_startup triggered for {__name__}")
@@ -88,32 +85,28 @@ class Pipeline:
         metadata["chat_id"] = chat_id
         body["metadata"] = metadata
 
-        # Per-request ID so concurrent requests for the same chat don't collide in pending_inlets
-        request_id = str(uuid.uuid4())
-        metadata["mlflow_request_id"] = request_id
-
-        self.pending_inlets[request_id] = {
+        self.pending_inlets[chat_id] = {
             "chat_id": chat_id,
             "input": get_last_user_message(body["messages"]),
             "model": body.get("model"),
             "user_email": user.get("email") if user else None,
         }
 
-        self.log(f"Stored inlet snapshot for request_id: {request_id}, chat_id: {chat_id}")
+        self.log(f"Stored inlet snapshot for chat_id: {chat_id}")
         return body
 
     async def outlet(self, body: dict, user: Optional[dict] = None) -> dict:
         self.log("MLflow Filter OUTLET called")
 
-        metadata = body.get("metadata", {})
-        request_id = metadata.get("mlflow_request_id")
-
-        inlet_data = self.pending_inlets.pop(request_id, None) if request_id else None
-        if inlet_data is None:
-            self.log(f"[WARNING] No inlet snapshot found for request_id: {request_id} — skipping trace")
+        chat_id = body.get("chat_id") or body.get("metadata", {}).get("chat_id")
+        if not chat_id:
+            self.log("[WARNING] No chat_id in outlet body — skipping trace")
             return body
 
-        chat_id = inlet_data["chat_id"]
+        inlet_data = self.pending_inlets.pop(chat_id, None)
+        if inlet_data is None:
+            self.log(f"[WARNING] No inlet snapshot found for chat_id: {chat_id} — skipping trace")
+            return body
         user_email = inlet_data["user_email"] or (user.get("email") if user else "unknown")
         model = inlet_data["model"] or body.get("model", "unknown")
         user_input = inlet_data["input"]
