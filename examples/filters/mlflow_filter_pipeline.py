@@ -10,6 +10,7 @@ requirements: mlflow>=2.14.0
 
 from typing import List, Optional
 import os
+import re
 import uuid
 
 from utils.pipelines.main import get_last_assistant_message, get_last_user_message
@@ -17,6 +18,17 @@ from pydantic import BaseModel
 import mlflow
 from mlflow.entities import SpanType
 from mlflow.tracing.constant import SpanAttributeKey, TokenUsageKey
+
+
+def extract_latest_user_input(text: str) -> str:
+    """If text contains a <chat_history> block, return only the last USER: segment inside it."""
+    match = re.search(r'<chat_history>(.*?)</chat_history>', text, re.DOTALL)
+    if match:
+        history = match.group(1)
+        user_messages = re.findall(r'USER:\s*(.*?)(?=\s*ASSISTANT:|\s*$)', history, re.DOTALL)
+        if user_messages:
+            return user_messages[-1].strip()
+    return text
 
 
 def get_last_assistant_message_obj(messages: List[dict]) -> dict:
@@ -87,7 +99,7 @@ class Pipeline:
 
         self.pending_inlets[chat_id] = {
             "chat_id": chat_id,
-            "input": get_last_user_message(body["messages"]),
+            "input": extract_latest_user_input(get_last_user_message(body["messages"])),
             "model": body.get("model"),
             "user_email": user.get("email") if user else None,
         }
