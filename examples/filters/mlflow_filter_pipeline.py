@@ -53,7 +53,7 @@ class Pipeline:
 
     def log(self, message: str):
         if self.valves.debug:
-            print(f"[DEBUG] {message}")
+            print(f"[DEBUG] {message}", flush=True)
 
     async def on_startup(self):
         self.log(f"on_startup triggered for {__name__}")
@@ -81,13 +81,11 @@ class Pipeline:
         chat_id = body.get("chat_id") or metadata.get("chat_id") or str(uuid.uuid4())
 
         if chat_id == "local":
-            session_id = metadata.get("session_id") or body.get("session_id") or str(uuid.uuid4())
+            session_id = metadata.get("session_id") or str(uuid.uuid4())
             metadata["session_id"] = session_id
-            body["session_id"] = session_id
             chat_id = f"temporary-session-{session_id}"
 
         metadata["chat_id"] = chat_id
-        body["chat_id"] = chat_id
         body["metadata"] = metadata
 
         # Per-request ID so concurrent requests for the same chat don't collide in pending_inlets
@@ -159,3 +157,6 @@ class Pipeline:
             self.log(warning)
 
         return body
+
+
+print("loaded mlfow filter pipeline.")
